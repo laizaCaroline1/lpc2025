@@ -1,0 +1,185 @@
+import pygame
+import random
+
+pygame.init()
+
+# Cores
+COLOR_BLACK = (0, 0, 0)
+COLOR_WHITE = (255, 255, 255)
+
+SCORE_MAX = 2
+
+# Configuração da tela
+size = (1280, 720)
+screen = pygame.display.set_mode(size)
+pygame.display.set_caption("MyPong - PyGame Edition - 2024-09-02")
+
+# Texto de pontuação
+score_font = pygame.font.Font('assets/PressStart2P.ttf', 44)
+score_text = score_font.render('00 x 00', True, COLOR_WHITE, COLOR_BLACK)
+score_text_rect = score_text.get_rect()
+score_text_rect.center = (640, 50)  # Corrigido para centralizar
+
+# Texto de vitória
+victory_font = pygame.font.Font('assets/PressStart2P.ttf', 100)
+victory_text = victory_font.render('VICTORY', True, COLOR_WHITE, COLOR_BLACK)
+victory_text_rect = victory_text.get_rect()  # Corrigido: usar victory_text
+victory_text_rect.center = (640, 360)  # Centralizado
+
+# Efeitos sonoros
+bounce_sound_effect = pygame.mixer.Sound('assets/bounce.wav')
+scoring_sound_effect = pygame.mixer.Sound('assets/258020_kodack_arcade-bleep-sound.wav')
+
+# Player 1
+player_1 = pygame.image.load("assets/player.png")
+player_1_y = 300
+player_1_move_up = False
+player_1_move_down = False
+player_1_speed = 10
+
+# Player 2 - robot
+player_2 = pygame.image.load("assets/player.png")
+player_2_y = 300
+player_2_speed = 8
+
+# Ball
+ball = pygame.image.load("assets/ball.png")
+ball_rect = ball.get_rect()
+ball_x = 640
+ball_y = 360
+ball_dx = 5
+ball_dy = 5
+ball_speed_base = 5
+
+# Pontuação
+score_1 = 0
+score_2 = 0
+
+# Game loop
+game_loop = True
+game_clock = pygame.time.Clock()
+
+def reset_ball():
+    """Reseta a bola para o centro com direção aleatória"""
+    global ball_x, ball_y, ball_dx, ball_dy
+    ball_x = 640
+    ball_y = 360
+    # Direção aleatória para esquerda ou direita
+    ball_dx = ball_speed_base * random.choice([-1, 1])
+    ball_dy = ball_speed_base * random.uniform(-1, 1)
+
+def update_ball_speed(paddle_y, ball_y, paddle_height=100):
+    """Atualiza a velocidade e ângulo da bola baseado no local do rebatimento"""
+    # Calcula a posição relativa no paddle (-0.5 a 0.5)
+    relative_intersect_y = (paddle_y + paddle_height/2 - ball_y) / (paddle_height/2)
+    
+    # Ângulo máximo de 75 graus em radianos
+    max_angle = 75 * 3.14159 / 180
+    
+    # Calcula o novo ângulo baseado na posição do rebatimento
+    angle = relative_intersect_y * max_angle
+    
+    # Mantém a velocidade base mas ajusta a direção
+    speed = max(ball_speed_base, abs(ball_dx) * 1.05)  # Aumenta ligeiramente a velocidade
+    
+    # Calcula novas velocidades baseadas no ângulo
+    new_ball_dx = speed * (1 if ball_dx > 0 else -1) * abs(pygame.math.Vector2(1, 0).rotate(angle).x)
+    new_ball_dy = speed * -pygame.math.Vector2(0, 1).rotate(angle).y
+    
+    return new_ball_dx, new_ball_dy
+
+while game_loop:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            game_loop = False
+        
+        # Controles do player 1
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_w:
+                player_1_move_up = True
+            if event.key == pygame.K_s:
+                player_1_move_down = True
+        
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_w:
+                player_1_move_up = False
+            if event.key == pygame.K_s:
+                player_1_move_down = False
+    
+    # Movimento do player 1
+    if player_1_move_up:
+        player_1_y = max(0, player_1_y - player_1_speed)
+    if player_1_move_down:
+        player_1_y = min(620, player_1_y + player_1_speed)
+    
+    # IA do player 2 (simples)
+    if ball_dx > 0:  # Bola indo para a direita
+        if player_2_y + 50 < ball_y:
+            player_2_y = min(620, player_2_y + player_2_speed)
+        elif player_2_y + 50 > ball_y:
+            player_2_y = max(0, player_2_y - player_2_speed)
+    
+    # Movimento da bola
+    ball_x += ball_dx
+    ball_y += ball_dy
+    
+    # Colisão com as paredes superior e inferior
+    if ball_y <= 0 or ball_y >= 700:
+        ball_dy *= -1
+        bounce_sound_effect.play()
+    
+    # Colisão com o player 1
+    if (ball_x <= 50 and ball_x >= 40 and 
+        ball_y >= player_1_y and ball_y <= player_1_y + 100):
+        ball_dx, ball_dy = update_ball_speed(player_1_y, ball_y)
+        bounce_sound_effect.play()
+    
+    # Colisão com o player 2
+    if (ball_x >= 1200 and ball_x <= 1210 and 
+        ball_y >= player_2_y and ball_y <= player_2_y + 100):
+        ball_dx, ball_dy = update_ball_speed(player_2_y, ball_y)
+        bounce_sound_effect.play()
+    
+    # Pontuação
+    if ball_x < 0:
+        score_2 += 1
+        scoring_sound_effect.play()
+        reset_ball()
+    
+    if ball_x > 1280:
+        score_1 += 1
+        scoring_sound_effect.play()
+        reset_ball()
+    
+    # Atualiza o texto da pontuação
+    score_text = score_font.render(f'{score_1:02d} x {score_2:02d}', True, COLOR_WHITE, COLOR_BLACK)
+    
+    # Verifica vitória
+    if score_1 >= SCORE_MAX or score_2 >= SCORE_MAX:
+        screen.fill(COLOR_BLACK)
+        screen.blit(victory_text, victory_text_rect)
+        pygame.display.flip()
+        pygame.time.wait(3000)
+        # Reseta o jogo
+        score_1 = 0
+        score_2 = 0
+        reset_ball()
+        continue
+    
+    # Desenha a tela
+    screen.fill(COLOR_BLACK)
+    
+    # Desenha a linha central
+    pygame.draw.line(screen, COLOR_WHITE, (640, 0), (640, 720), 5)
+    
+    # Desenha os objetos
+    screen.blit(player_1, (50, player_1_y))
+    screen.blit(player_2, (1200, player_2_y))
+    screen.blit(ball, (ball_x, ball_y))
+    screen.blit(score_text, score_text_rect)
+    
+    # Atualiza a tela
+    pygame.display.flip()
+    game_clock.tick(60)
+
+pygame.quit()
